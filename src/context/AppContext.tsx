@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { calculatePiggyLevel, SHARE_BADGES } from '../types';
-import type { AppState, Family, Kid, Transaction, SpendingGoal, Badge } from '../types';
+import {
+  getWarriorRank,
+  getPetLevel,
+  SHARE_BADGES,
+  XP_REWARDS,
+  type PetType
+} from '../types';
+import type { AppState, Family, Kid, Transaction, SpendingGoal, Badge, Pet, StablePet, Cause } from '../types';
 
 const STORAGE_KEY = 'wealth-warriors-data';
 
@@ -11,7 +17,8 @@ type AppAction =
   | { type: 'GRANT_MONEY'; payload: { kidId: string; amount: number; description: string } }
   | { type: 'ALLOCATE_MONEY'; payload: { kidId: string; save: number; spend: number; share: number } }
   | { type: 'SET_INTEREST_RATE'; payload: { kidId: string; rate: number } }
-  | { type: 'ADD_GOAL'; payload: { kidId: string; name: string; targetAmount: number; icon: string } }
+  | { type: 'ADD_GOAL'; payload: { kidId: string; name: string; targetAmount: number; icon: string; imageUrl?: string; linkUrl?: string } }
+  | { type: 'ADD_CUSTOM_CAUSE'; payload: { kidId: string; cause: Cause } }
   | { type: 'FUND_GOAL'; payload: { kidId: string; goalId: string; amount: number } }
   | { type: 'PURCHASE_GOAL'; payload: { kidId: string; goalId: string } }
   | { type: 'DONATE'; payload: { kidId: string; amount: number; causeName: string } }
@@ -20,6 +27,9 @@ type AppAction =
   | { type: 'SWITCH_MODE'; payload: 'parent' | 'kid' }
   | { type: 'SELECT_KID'; payload: string | null }
   | { type: 'SET_PARENT_PIN'; payload: string }
+  | { type: 'SET_PET'; payload: { kidId: string; petType: PetType; petName: string } }
+  | { type: 'HATCH_NEW_PET'; payload: { kidId: string; petType: PetType; petName: string } }
+  | { type: 'ADD_XP'; payload: { kidId: string; amount: number } }
   | { type: 'LOAD_STATE'; payload: AppState }
   | { type: 'RESET' };
 
@@ -48,6 +58,36 @@ function checkAndAwardBadges(kid: Kid): Badge[] {
   return newBadges;
 }
 
+function updatePetLevel(kid: Kid): Kid {
+  if (!kid.currentPet) return kid;
+
+  const newLevel = getPetLevel(kid.buckets.save.balance);
+
+  // Check if pet reached Elder (level 5)
+  if (newLevel === 5 && kid.currentPet.level < 5) {
+    // Pet stays at level 5, will be moved to stable when user chooses new pet
+    return {
+      ...kid,
+      currentPet: {
+        ...kid.currentPet,
+        level: 5,
+      },
+    };
+  }
+
+  if (newLevel !== kid.currentPet.level) {
+    return {
+      ...kid,
+      currentPet: {
+        ...kid.currentPet,
+        level: newLevel,
+      },
+    };
+  }
+
+  return kid;
+}
+
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_FAMILY': {
@@ -61,7 +101,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
         name: action.payload.name,
         age: action.payload.age,
         avatar: action.payload.avatar,
-        piggyLevel: 1,
+        totalXP: 0,
+        warriorRank: 1,
+        currentPet: null,
+        petStable: [],
         buckets: {
           save: { balance: 0, interestRate: 5 },
           spend: { balance: 0, goals: [] },
@@ -76,6 +119,94 @@ function appReducer(state: AppState, action: AppAction): AppState {
         family: {
           ...state.family,
           kids: [...state.family.kids, newKid],
+        },
+      };
+    }
+
+    case 'SET_PET': {
+      if (!state.family) return state;
+      const { kidId, petType, petName } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+            const newPet: Pet = {
+              id: uuidv4(),
+              type: petType,
+              name: petName,
+              level: getPetLevel(kid.buckets.save.balance),
+              createdAt: new Date().toISOString(),
+            };
+            return {
+              ...kid,
+              currentPet: newPet,
+            };
+          }),
+        },
+      };
+    }
+
+    case 'HATCH_NEW_PET': {
+      if (!state.family) return state;
+      const { kidId, petType, petName } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+
+            // Move current pet to stable if it's Elder
+            let newStable = [...kid.petStable];
+            if (kid.currentPet && kid.currentPet.level === 5) {
+              const stablePet: StablePet = {
+                id: kid.currentPet.id,
+                type: kid.currentPet.type,
+                name: kid.currentPet.name,
+                level: 5,
+                raisedToElderAt: new Date().toISOString(),
+              };
+              newStable = [...newStable, stablePet];
+            }
+
+            // Create new pet (starts at egg level 0)
+            const newPet: Pet = {
+              id: uuidv4(),
+              type: petType,
+              name: petName,
+              level: 0, // Always starts as egg for new pet
+              createdAt: new Date().toISOString(),
+            };
+
+            return {
+              ...kid,
+              currentPet: newPet,
+              petStable: newStable,
+            };
+          }),
+        },
+      };
+    }
+
+    case 'ADD_XP': {
+      if (!state.family) return state;
+      const { kidId, amount } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+            const newTotalXP = kid.totalXP + amount;
+            const newRank = getWarriorRank(newTotalXP);
+            return {
+              ...kid,
+              totalXP: newTotalXP,
+              warriorRank: newRank,
+            };
+          }),
         },
       };
     }
@@ -118,6 +249,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
             const timestamp = new Date().toISOString();
             const transactions: Transaction[] = [];
 
+            // Calculate XP
+            let xpEarned = XP_REWARDS.ALLOCATE_MONEY; // Base XP for allocating
+            xpEarned += Math.floor(save * XP_REWARDS.SAVE_PER_DOLLAR); // XP for saving
+
             if (save > 0) {
               transactions.push({
                 id: uuidv4(),
@@ -125,6 +260,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 amount: save,
                 bucket: 'save',
                 description: `Allocated $${save.toFixed(2)} to Save`,
+                xpEarned: Math.floor(save * XP_REWARDS.SAVE_PER_DOLLAR),
                 timestamp,
               });
             }
@@ -150,12 +286,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
             }
 
             const newSaveBalance = kid.buckets.save.balance + save;
-            const newPiggyLevel = calculatePiggyLevel(newSaveBalance);
+            const newTotalXP = kid.totalXP + xpEarned;
+            const newRank = getWarriorRank(newTotalXP);
 
-            return {
+            let updatedKid: Kid = {
               ...kid,
               pendingAllocation: null,
-              piggyLevel: newPiggyLevel,
+              totalXP: newTotalXP,
+              warriorRank: newRank,
               buckets: {
                 save: { ...kid.buckets.save, balance: newSaveBalance },
                 spend: { ...kid.buckets.spend, balance: kid.buckets.spend.balance + spend },
@@ -163,6 +301,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
               },
               transactions: [...transactions, ...kid.transactions],
             };
+
+            // Update pet level based on new save balance
+            updatedKid = updatePetLevel(updatedKid);
+
+            return updatedKid;
           }),
         },
       };
@@ -191,16 +334,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_GOAL': {
       if (!state.family) return state;
-      const { kidId, name, targetAmount, icon } = action.payload;
+      const { kidId, name, targetAmount, icon, imageUrl, linkUrl } = action.payload;
       const newGoal: SpendingGoal = {
         id: uuidv4(),
         name,
         targetAmount,
         currentAmount: 0,
+        visual: icon,
+        visualType: imageUrl ? 'image' : 'emoji',
+        imageUrl,
+        linkUrl,
         completed: false,
         purchased: false,
         createdAt: new Date().toISOString(),
-        icon,
       };
       return {
         ...state,
@@ -215,6 +361,30 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 spend: {
                   ...kid.buckets.spend,
                   goals: [...kid.buckets.spend.goals, newGoal],
+                },
+              },
+            };
+          }),
+        },
+      };
+    }
+
+    case 'ADD_CUSTOM_CAUSE': {
+      if (!state.family) return state;
+      const { kidId, cause } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+            return {
+              ...kid,
+              buckets: {
+                ...kid.buckets,
+                share: {
+                  ...kid.buckets.share,
+                  customCauses: [...(kid.buckets.share.customCauses || []), cause],
                 },
               },
             };
@@ -268,16 +438,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
             if (!goal || goal.purchased || kid.buckets.spend.balance < goal.targetAmount) {
               return kid;
             }
+
+            // Award XP for completing goal
+            const xpEarned = XP_REWARDS.COMPLETE_GOAL;
+            const newTotalXP = kid.totalXP + xpEarned;
+            const newRank = getWarriorRank(newTotalXP);
+
             const transaction: Transaction = {
               id: uuidv4(),
               type: 'goal_purchase',
               amount: -goal.targetAmount,
               bucket: 'spend',
               description: `Purchased: ${goal.name}`,
+              xpEarned,
               timestamp: new Date().toISOString(),
             };
             return {
               ...kid,
+              totalXP: newTotalXP,
+              warriorRank: newRank,
               buckets: {
                 ...kid.buckets,
                 spend: {
@@ -309,16 +488,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
           kids: state.family.kids.map(kid => {
             if (kid.id !== kidId) return kid;
             if (kid.buckets.share.balance < amount) return kid;
+
+            // Award XP for donating
+            const xpEarned = Math.floor(amount * XP_REWARDS.DONATE_PER_DOLLAR);
+            const newTotalXP = kid.totalXP + xpEarned;
+            const newRank = getWarriorRank(newTotalXP);
+
             const transaction: Transaction = {
               id: uuidv4(),
               type: 'donation',
               amount: -amount,
               bucket: 'share',
               description: `Donated to ${causeName}`,
+              xpEarned,
               timestamp: new Date().toISOString(),
             };
             const updatedKid: Kid = {
               ...kid,
+              totalXP: newTotalXP,
+              warriorRank: newRank,
               buckets: {
                 ...kid.buckets,
                 share: {
@@ -365,18 +553,27 @@ function appReducer(state: AppState, action: AppAction): AppState {
             const monthlyRate = kid.buckets.save.interestRate / 12 / 100;
             const interestAmount = kid.buckets.save.balance * monthlyRate;
             if (interestAmount <= 0) return kid;
+
+            // Award XP for earning interest
+            const xpEarned = XP_REWARDS.EARN_INTEREST;
+            const newTotalXP = kid.totalXP + xpEarned;
+            const newRank = getWarriorRank(newTotalXP);
+
             const transaction: Transaction = {
               id: uuidv4(),
               type: 'interest',
               amount: interestAmount,
               bucket: 'save',
               description: `Monthly interest (${kid.buckets.save.interestRate}% APR)`,
+              xpEarned,
               timestamp: new Date().toISOString(),
             };
             const newBalance = kid.buckets.save.balance + interestAmount;
-            return {
+
+            let updatedKid: Kid = {
               ...kid,
-              piggyLevel: calculatePiggyLevel(newBalance),
+              totalXP: newTotalXP,
+              warriorRank: newRank,
               buckets: {
                 ...kid.buckets,
                 save: {
@@ -386,6 +583,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
               },
               transactions: [transaction, ...kid.transactions],
             };
+
+            // Update pet level
+            updatedKid = updatePetLevel(updatedKid);
+
+            return updatedKid;
           }),
         },
       };
@@ -434,7 +636,8 @@ interface AppContextValue {
   grantMoney: (kidId: string, amount: number, description: string) => void;
   allocateMoney: (kidId: string, save: number, spend: number, share: number) => void;
   setInterestRate: (kidId: string, rate: number) => void;
-  addGoal: (kidId: string, name: string, targetAmount: number, icon: string) => void;
+  addGoal: (kidId: string, name: string, targetAmount: number, icon: string, imageUrl?: string, linkUrl?: string) => void;
+  addCustomCause: (kidId: string, cause: Cause) => void;
   fundGoal: (kidId: string, goalId: string, amount: number) => void;
   setParentPin: (pin: string) => void;
   purchaseGoal: (kidId: string, goalId: string) => void;
@@ -444,6 +647,8 @@ interface AppContextValue {
   switchMode: (mode: 'parent' | 'kid') => void;
   selectKid: (kidId: string | null) => void;
   getSelectedKid: () => Kid | null;
+  setPet: (kidId: string, petType: PetType, petName: string) => void;
+  hatchNewPet: (kidId: string, petType: PetType, petName: string) => void;
   resetApp: () => void;
 }
 
@@ -494,8 +699,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_INTEREST_RATE', payload: { kidId, rate } });
   };
 
-  const addGoal = (kidId: string, name: string, targetAmount: number, icon: string) => {
-    dispatch({ type: 'ADD_GOAL', payload: { kidId, name, targetAmount, icon } });
+  const addGoal = (kidId: string, name: string, targetAmount: number, icon: string, imageUrl?: string, linkUrl?: string) => {
+    dispatch({ type: 'ADD_GOAL', payload: { kidId, name, targetAmount, icon, imageUrl, linkUrl } });
+  };
+
+  const addCustomCause = (kidId: string, cause: Cause) => {
+    dispatch({ type: 'ADD_CUSTOM_CAUSE', payload: { kidId, cause } });
   };
 
   const fundGoal = (kidId: string, goalId: string, amount: number) => {
@@ -535,6 +744,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return state.family.kids.find(k => k.id === state.selectedKidId) || null;
   };
 
+  const setPet = (kidId: string, petType: PetType, petName: string) => {
+    dispatch({ type: 'SET_PET', payload: { kidId, petType, petName } });
+  };
+
+  const hatchNewPet = (kidId: string, petType: PetType, petName: string) => {
+    dispatch({ type: 'HATCH_NEW_PET', payload: { kidId, petType, petName } });
+  };
+
   const resetApp = () => {
     localStorage.removeItem(STORAGE_KEY);
     dispatch({ type: 'RESET' });
@@ -551,6 +768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         allocateMoney,
         setInterestRate,
         addGoal,
+        addCustomCause,
         fundGoal,
         purchaseGoal,
         setParentPin,
@@ -560,6 +778,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         switchMode,
         selectKid,
         getSelectedKid,
+        setPet,
+        hatchNewPet,
         resetApp,
       }}
     >

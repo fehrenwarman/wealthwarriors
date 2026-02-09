@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
-import { Piggy } from './Piggy';
 import { AllocationScreen } from './AllocationScreen';
 import { SaveBucketScreen } from './SaveBucketScreen';
 import { SpendBucketScreen } from './SpendBucketScreen';
 import { ShareBucketScreen } from './ShareBucketScreen';
 import { PinLock } from './PinLock';
-import { getPiggyLevelName, getNextLevelThreshold, getPreviousLevelThreshold } from '../types';
+import {
+  getWarriorRankInfo,
+  getNextRankXP,
+  getCurrentRankMinXP,
+  getPetEmoji,
+  getPetLevelName,
+  PET_OPTIONS
+} from '../types';
 
 type Screen = 'dashboard' | 'allocation' | 'save' | 'spend' | 'share';
 
@@ -35,11 +41,18 @@ export function KidDashboard() {
   }
 
   const totalBalance = kid.buckets.save.balance + kid.buckets.spend.balance + kid.buckets.share.balance;
-  const nextThreshold = getNextLevelThreshold(kid.piggyLevel);
-  const prevThreshold = getPreviousLevelThreshold(kid.piggyLevel);
-  const progressToNext = kid.piggyLevel < 4
-    ? ((kid.buckets.save.balance - prevThreshold) / (nextThreshold - prevThreshold)) * 100
-    : 100;
+
+  // Warrior XP progress
+  const warriorInfo = getWarriorRankInfo(kid.warriorRank);
+  const nextRankXP = getNextRankXP(kid.warriorRank);
+  const currentRankMinXP = getCurrentRankMinXP(kid.warriorRank);
+  const xpInCurrentRank = kid.totalXP - currentRankMinXP;
+  const xpNeededForNextRank = nextRankXP - currentRankMinXP;
+  const xpProgress = kid.warriorRank >= 7 ? 100 : (xpInCurrentRank / xpNeededForNextRank) * 100;
+
+  // Pet info
+  const petEmoji = kid.currentPet ? getPetEmoji(kid.currentPet.type, kid.currentPet.level) : '🥚';
+  const petLevelName = kid.currentPet ? getPetLevelName(kid.currentPet.level) : 'No Pet';
 
   const handleParentModeClick = () => {
     if (state.family?.settings?.parentPin) {
@@ -100,42 +113,104 @@ export function KidDashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
-        {/* Hero Balance Card */}
+        {/* Warrior Rank Card - Hero Section */}
         <motion.div
-          className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-6 mb-6"
+          className="bg-gradient-to-r from-amber-500/10 via-slate-800 to-amber-500/10 rounded-2xl shadow-lg border border-amber-500/30 p-6 mb-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="text-center">
-            <p className="text-slate-400 text-sm font-medium uppercase tracking-wide">Total Balance</p>
-            <p className="text-5xl font-bold bg-gradient-to-r from-amber-400 to-amber-500 bg-clip-text text-transparent mt-1">
-              ${totalBalance.toFixed(2)}
-            </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <motion.div
+                className="text-5xl"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                {warriorInfo.emoji}
+              </motion.div>
+              <div>
+                <p className="text-slate-400 text-sm font-medium">Warrior Rank</p>
+                <p className="text-2xl font-bold text-amber-400">{warriorInfo.name}</p>
+                <p className="text-slate-500 text-sm">{warriorInfo.description}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-slate-400 text-sm">Total XP</p>
+              <p className="text-3xl font-bold text-white">{kid.totalXP.toLocaleString()}</p>
+            </div>
           </div>
 
-          {/* Warrior Progress - Compact */}
-          <div className="mt-6 flex items-center gap-4 bg-gradient-to-r from-amber-500/10 to-amber-600/10 border border-amber-500/20 rounded-xl p-4">
-            <Piggy level={kid.piggyLevel} size="sm" />
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-white">{getPiggyLevelName(kid.piggyLevel)}</span>
-                {kid.piggyLevel < 4 && (
-                  <span className="text-xs text-slate-400">
-                    ${(nextThreshold - kid.buckets.save.balance).toFixed(2)} to next rank
-                  </span>
-                )}
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(100, Math.max(0, progressToNext))}%` }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
-                />
-              </div>
+          {/* XP Progress Bar */}
+          <div className="mt-4">
+            <div className="flex justify-between text-sm text-slate-400 mb-2">
+              <span>Rank {kid.warriorRank}</span>
+              {kid.warriorRank < 7 && (
+                <span>{nextRankXP - kid.totalXP} XP to Rank {kid.warriorRank + 1}</span>
+              )}
+              {kid.warriorRank >= 7 && (
+                <span className="text-amber-400">Max Rank!</span>
+              )}
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, Math.max(0, xpProgress))}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
             </div>
           </div>
         </motion.div>
+
+        {/* Balance + Pet Row */}
+        <div className="grid md:grid-cols-2 gap-4 mb-6">
+          {/* Total Balance Card */}
+          <motion.div
+            className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <p className="text-slate-400 text-sm font-medium uppercase tracking-wide">Total Balance</p>
+            <p className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-500 bg-clip-text text-transparent mt-1">
+              ${totalBalance.toFixed(2)}
+            </p>
+          </motion.div>
+
+          {/* Pet Companion Card */}
+          <motion.button
+            onClick={() => setCurrentScreen('save')}
+            className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-6 text-left hover:border-amber-500/50 transition-all group"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            whileHover={{ y: -2 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm font-medium">Companion</p>
+                {kid.currentPet ? (
+                  <>
+                    <p className="text-xl font-bold text-white">{kid.currentPet.name}</p>
+                    <p className="text-amber-400 text-sm">{petLevelName} {PET_OPTIONS.find(p => p.type === kid.currentPet?.type)?.name}</p>
+                  </>
+                ) : (
+                  <p className="text-xl font-bold text-slate-500">No pet yet</p>
+                )}
+              </div>
+              <motion.div
+                className="text-5xl"
+                animate={{ y: [0, -5, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                {petEmoji}
+              </motion.div>
+            </div>
+            <p className="text-xs text-slate-500 mt-2 group-hover:text-amber-400 transition-colors">
+              Tap to view pet details →
+            </p>
+          </motion.button>
+        </div>
 
         {/* Bucket Cards - Modern Design */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -145,7 +220,7 @@ export function KidDashboard() {
             className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-5 text-left hover:shadow-xl hover:border-amber-500/50 transition-all group"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.2 }}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -172,7 +247,7 @@ export function KidDashboard() {
             className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-5 text-left hover:shadow-xl hover:border-blue-500/50 transition-all group relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.3 }}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -208,7 +283,7 @@ export function KidDashboard() {
             className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-5 text-left hover:shadow-xl hover:border-rose-500/50 transition-all group"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.4 }}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -230,13 +305,37 @@ export function KidDashboard() {
           </motion.button>
         </div>
 
+        {/* Pet Stable Preview */}
+        {kid.petStable.length > 0 && (
+          <motion.div
+            className="mt-6 bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Pet Stable</h3>
+            <div className="flex flex-wrap gap-3">
+              {kid.petStable.map((pet) => (
+                <motion.div
+                  key={pet.id}
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500/10 to-amber-600/10 border border-amber-500/30 rounded-full px-4 py-2"
+                  whileHover={{ scale: 1.05 }}
+                >
+                  <span className="text-xl">👑{PET_OPTIONS.find(p => p.type === pet.type)?.emoji}</span>
+                  <span className="text-sm font-medium text-amber-400">{pet.name}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* Badges Preview */}
         {kid.badges.length > 0 && (
           <motion.div
             className="mt-6 bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-5"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.6 }}
           >
             <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Achievements</h3>
             <div className="flex flex-wrap gap-3">
@@ -290,9 +389,9 @@ export function KidDashboard() {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold text-white mb-4">Rank Up!</h2>
-              <Piggy level={kid.piggyLevel} size="lg" />
+              <div className="text-6xl mb-4">{warriorInfo.emoji}</div>
               <p className="mt-4 text-slate-300">
-                You are now a <span className="font-bold text-amber-400">{getPiggyLevelName(kid.piggyLevel)}</span>!
+                You are now a <span className="font-bold text-amber-400">{warriorInfo.name}</span>!
               </p>
               <motion.button
                 onClick={() => setShowLevelUp(false)}

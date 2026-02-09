@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
-import { AVATAR_OPTIONS } from '../types';
+import { AVATAR_OPTIONS, getWarriorRankInfo, getPetEmoji } from '../types';
 import type { Kid } from '../types';
-import { Piggy } from './Piggy';
 import { PinSetup } from './PinLock';
 
 export function ParentDashboard() {
@@ -102,91 +101,123 @@ export function ParentDashboard() {
 
         {/* Kids Grid */}
         <div className="grid gap-4 md:grid-cols-2">
-          {state.family.kids.map((kid, index) => (
-            <motion.div
-              key={kid.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden"
-            >
-              {/* Kid Header */}
-              <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                    <span className="text-3xl">{kid.avatar}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-slate-900">{kid.name}</h3>
-                    <p className="text-slate-800/70 text-sm">Age {kid.age}</p>
-                  </div>
-                  <Piggy level={kid.piggyLevel} size="sm" />
-                </div>
-              </div>
+          {state.family.kids.map((kid, index) => {
+            const warriorInfo = getWarriorRankInfo(kid.warriorRank);
+            const petEmoji = kid.currentPet ? getPetEmoji(kid.currentPet.type, kid.currentPet.level) : '🥚';
 
-              {/* Balances */}
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-4">
-                  <span className="text-slate-400 font-medium">Total Balance</span>
-                  <span className="text-2xl font-bold text-white">
-                    ${getTotalBalance(kid).toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
-                    <div className="text-lg">💰</div>
-                    <div className="text-xs text-slate-400 mt-1">Save</div>
-                    <div className="font-bold text-amber-400">
-                      ${kid.buckets.save.balance.toFixed(2)}
+            return (
+              <motion.div
+                key={kid.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden"
+              >
+                {/* Kid Header */}
+                <div className="bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                      <span className="text-3xl">{kid.avatar}</span>
                     </div>
-                  </div>
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center">
-                    <div className="text-lg">🎯</div>
-                    <div className="text-xs text-slate-400 mt-1">Spend</div>
-                    <div className="font-bold text-blue-400">
-                      ${kid.buckets.spend.balance.toFixed(2)}
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-slate-900">{kid.name}</h3>
+                      <div className="flex items-center gap-2 text-slate-800/70 text-sm">
+                        <span>{warriorInfo.emoji}</span>
+                        <span>{warriorInfo.name}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
-                    <div className="text-lg">❤️</div>
-                    <div className="text-xs text-slate-400 mt-1">Share</div>
-                    <div className="font-bold text-rose-400">
-                      ${kid.buckets.share.balance.toFixed(2)}
-                    </div>
+                    <div className="text-3xl">{petEmoji}</div>
                   </div>
                 </div>
 
-                {kid.pendingAllocation && kid.pendingAllocation > 0 && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center">
-                    <span className="text-amber-400 font-medium text-sm">
-                      ${kid.pendingAllocation.toFixed(2)} pending allocation
+                {/* Stats Row */}
+                <div className="px-5 py-3 bg-slate-900/50 border-b border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <p className="text-xs text-slate-500">XP</p>
+                      <p className="text-sm font-bold text-amber-400">{kid.totalXP.toLocaleString()}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-slate-500">Rank</p>
+                      <p className="text-sm font-bold text-white">{kid.warriorRank}</p>
+                    </div>
+                    {kid.currentPet && (
+                      <div className="text-center">
+                        <p className="text-xs text-slate-500">Pet</p>
+                        <p className="text-sm font-bold text-white">{kid.currentPet.name}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">Stable</p>
+                    <p className="text-sm font-bold text-amber-400">{kid.petStable.length} Elder{kid.petStable.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+
+                {/* Balances */}
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-4">
+                    <span className="text-slate-400 font-medium">Total Balance</span>
+                    <span className="text-2xl font-bold text-white">
+                      ${getTotalBalance(kid).toFixed(2)}
                     </span>
                   </div>
-                )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  <motion.button
-                    onClick={() => setShowGrantModal(kid.id)}
-                    className="flex-1 py-2.5 bg-emerald-500 text-white font-semibold rounded-xl shadow-sm text-sm"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Grant Funds
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setShowKidDetails(kid.id)}
-                    className="flex-1 py-2.5 bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm hover:bg-slate-600 transition-colors"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    Settings
-                  </motion.button>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+                      <div className="text-lg">💰</div>
+                      <div className="text-xs text-slate-400 mt-1">Save</div>
+                      <div className="font-bold text-amber-400">
+                        ${kid.buckets.save.balance.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center">
+                      <div className="text-lg">🎯</div>
+                      <div className="text-xs text-slate-400 mt-1">Spend</div>
+                      <div className="font-bold text-blue-400">
+                        ${kid.buckets.spend.balance.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
+                      <div className="text-lg">❤️</div>
+                      <div className="text-xs text-slate-400 mt-1">Share</div>
+                      <div className="font-bold text-rose-400">
+                        ${kid.buckets.share.balance.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {kid.pendingAllocation && kid.pendingAllocation > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center">
+                      <span className="text-amber-400 font-medium text-sm">
+                        ${kid.pendingAllocation.toFixed(2)} pending allocation
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <motion.button
+                      onClick={() => setShowGrantModal(kid.id)}
+                      className="flex-1 py-2.5 bg-emerald-500 text-white font-semibold rounded-xl shadow-sm text-sm"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Grant Funds
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setShowKidDetails(kid.id)}
+                      className="flex-1 py-2.5 bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm hover:bg-slate-600 transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Settings
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
 
         {state.family.kids.length === 0 && (
@@ -408,6 +439,7 @@ function KidDetailsModal({
   };
 
   const monthlyInterest = (kid.buckets.save.balance * interestRate / 100 / 12);
+  const warriorInfo = getWarriorRankInfo(kid.warriorRank);
 
   return (
     <motion.div
@@ -427,7 +459,10 @@ function KidDetailsModal({
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{kid.avatar}</span>
-            <h3 className="text-xl font-bold text-white">{kid.name}'s Settings</h3>
+            <div>
+              <h3 className="text-xl font-bold text-white">{kid.name}'s Settings</h3>
+              <p className="text-sm text-amber-400">{warriorInfo.emoji} {warriorInfo.name}</p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -437,6 +472,22 @@ function KidDetailsModal({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+
+        {/* Stats Overview */}
+        <div className="bg-slate-900/50 rounded-xl p-4 mb-5 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-xs text-slate-500">Total XP</p>
+            <p className="text-lg font-bold text-amber-400">{kid.totalXP.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">Rank</p>
+            <p className="text-lg font-bold text-white">{kid.warriorRank}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">Stable</p>
+            <p className="text-lg font-bold text-white">{kid.petStable.length}</p>
+          </div>
         </div>
 
         {/* Interest Rate Setting */}
@@ -492,9 +543,14 @@ function KidDetailsModal({
                 >
                   <div>
                     <p className="font-medium text-slate-300 text-sm">{tx.description}</p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(tx.timestamp).toLocaleDateString()}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-500">
+                        {new Date(tx.timestamp).toLocaleDateString()}
+                      </p>
+                      {tx.xpEarned && tx.xpEarned > 0 && (
+                        <span className="text-xs text-amber-400">+{tx.xpEarned} XP</span>
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`font-semibold text-sm ${

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '../context/AppContext';
-import { Piggy } from './Piggy';
+import { XP_REWARDS, getPetEmoji } from '../types';
 
 interface AllocationScreenProps {
   onComplete: () => void;
@@ -43,6 +43,12 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
   const allocatedAmount = saveAmount + spendAmount + shareAmount;
   const remainingAmount = amount - allocatedAmount;
 
+  // Calculate XP preview
+  const xpPreview = XP_REWARDS.ALLOCATE_MONEY + Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR);
+
+  // Pet info
+  const petEmoji = kid.currentPet ? getPetEmoji(kid.currentPet.type, kid.currentPet.level) : '🥚';
+
   const handleQuickSplit = (split: typeof QUICK_SPLITS[0]) => {
     setSavePercent(split.save);
     setSpendPercent(split.spend);
@@ -70,7 +76,13 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
             animate={{ y: 0, opacity: 1 }}
             className="flex justify-center mb-4"
           >
-            <Piggy level={kid.piggyLevel} size="md" />
+            <motion.div
+              className="text-6xl"
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {petEmoji}
+            </motion.div>
           </motion.div>
           <motion.h2
             className="text-xl font-bold text-white"
@@ -112,6 +124,32 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
           </motion.div>
         </div>
 
+        {/* XP Preview */}
+        <motion.div
+          className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-5"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⚔️</span>
+              <span className="text-sm text-slate-300">XP you'll earn:</span>
+            </div>
+            <motion.span
+              className="text-lg font-bold text-amber-400"
+              key={xpPreview}
+              initial={{ scale: 1.2 }}
+              animate={{ scale: 1 }}
+            >
+              +{xpPreview} XP
+            </motion.span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            +{XP_REWARDS.ALLOCATE_MONEY} base + {Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR)} from saving
+          </p>
+        </motion.div>
+
         {/* Quick Split Buttons */}
         <div className="flex gap-2 mb-6 justify-center">
           {QUICK_SPLITS.map((split) => (
@@ -137,6 +175,7 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
                   <span className="text-lg">💰</span>
                 </div>
                 <span className="font-semibold text-white">Save</span>
+                <span className="text-xs text-amber-400 ml-1">(+{Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR)} XP)</span>
               </div>
               <div className="text-right">
                 <span className="text-xl font-bold text-amber-400">
@@ -238,7 +277,7 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
           whileHover={{ scale: isValid ? 1.02 : 1 }}
           whileTap={{ scale: isValid ? 0.98 : 1 }}
         >
-          Deploy Funds
+          Deploy Funds (+{xpPreview} XP)
         </motion.button>
       </motion.div>
     </div>

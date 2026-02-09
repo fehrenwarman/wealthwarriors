@@ -14,6 +14,9 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
   const [goalName, setGoalName] = useState('');
   const [goalAmount, setGoalAmount] = useState('');
   const [goalIcon, setGoalIcon] = useState('🎮');
+  const [goalLink, setGoalLink] = useState('');
+  const [goalImageUrl, setGoalImageUrl] = useState('');
+  const [useCustomImage, setUseCustomImage] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [purchasedGoalName, setPurchasedGoalName] = useState('');
 
@@ -25,10 +28,20 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
 
   const handleAddGoal = () => {
     if (goalName.trim() && parseFloat(goalAmount) > 0) {
-      addGoal(kid.id, goalName.trim(), parseFloat(goalAmount), goalIcon);
+      addGoal(
+        kid.id,
+        goalName.trim(),
+        parseFloat(goalAmount),
+        useCustomImage ? '' : goalIcon,
+        useCustomImage ? goalImageUrl : undefined,
+        goalLink || undefined
+      );
       setGoalName('');
       setGoalAmount('');
       setGoalIcon('🎮');
+      setGoalLink('');
+      setGoalImageUrl('');
+      setUseCustomImage(false);
       setShowAddGoal(false);
     }
   };
@@ -127,10 +140,21 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
                     layout
                   >
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden ${
                         canPurchase ? 'bg-emerald-500/20' : 'bg-slate-700'
                       }`}>
-                        <span className="text-2xl">{goal.icon || '🎯'}</span>
+                        {goal.imageUrl ? (
+                          <img
+                            src={goal.imageUrl}
+                            alt={goal.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-2xl">{goal.visual || '🎯'}</span>
+                        )}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
@@ -139,6 +163,17 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
                             ${goal.targetAmount.toFixed(2)}
                           </span>
                         </div>
+
+                        {goal.linkUrl && (
+                          <a
+                            href={goal.linkUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-400 hover:text-blue-300 mb-2 inline-block"
+                          >
+                            View product →
+                          </a>
+                        )}
 
                         {/* Progress Bar */}
                         <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden mb-2">
@@ -201,8 +236,16 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
                   key={goal.id}
                   className="flex items-center gap-4 bg-slate-900/50 rounded-xl p-3"
                 >
-                  <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                    <span className="text-xl">{goal.icon || '✅'}</span>
+                  <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center overflow-hidden">
+                    {goal.imageUrl ? (
+                      <img
+                        src={goal.imageUrl}
+                        alt={goal.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xl">{goal.visual || '✅'}</span>
+                    )}
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-slate-300">{goal.name}</p>
@@ -264,39 +307,93 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
             onClick={() => setShowAddGoal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl my-8"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-xl font-bold text-white mb-5">New Mission</h3>
 
-              {/* Icon Selection */}
+              {/* Toggle between emoji and custom image */}
               <div className="mb-5">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Choose an icon</label>
-                <div className="grid grid-cols-8 gap-2">
-                  {GOAL_ICONS.map((icon) => (
-                    <motion.button
-                      key={icon.emoji}
-                      onClick={() => setGoalIcon(icon.emoji)}
-                      className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-colors ${
-                        goalIcon === icon.emoji
-                          ? 'bg-blue-500/20 ring-2 ring-blue-400'
-                          : 'bg-slate-700 hover:bg-slate-600'
-                      }`}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      title={icon.label}
-                    >
-                      {icon.emoji}
-                    </motion.button>
-                  ))}
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setUseCustomImage(false)}
+                    className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      !useCustomImage
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500'
+                        : 'bg-slate-700 text-slate-400 border border-slate-600'
+                    }`}
+                  >
+                    Choose Icon
+                  </button>
+                  <button
+                    onClick={() => setUseCustomImage(true)}
+                    className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      useCustomImage
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500'
+                        : 'bg-slate-700 text-slate-400 border border-slate-600'
+                    }`}
+                  >
+                    Custom Image
+                  </button>
                 </div>
+
+                {!useCustomImage ? (
+                  <>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Choose an icon</label>
+                    <div className="grid grid-cols-8 gap-2">
+                      {GOAL_ICONS.map((icon) => (
+                        <motion.button
+                          key={icon.emoji}
+                          onClick={() => setGoalIcon(icon.emoji)}
+                          className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-colors ${
+                            goalIcon === icon.emoji
+                              ? 'bg-blue-500/20 ring-2 ring-blue-400'
+                              : 'bg-slate-700 hover:bg-slate-600'
+                          }`}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          title={icon.label}
+                        >
+                          {icon.emoji}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-300">Image URL</span>
+                      <input
+                        type="url"
+                        value={goalImageUrl}
+                        onChange={(e) => setGoalImageUrl(e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="mt-1.5 block w-full px-4 py-3 border border-slate-600 bg-slate-900 text-white rounded-xl focus:border-blue-400 focus:ring focus:ring-blue-500/20 transition-all text-sm"
+                      />
+                    </label>
+                    {goalImageUrl && (
+                      <div className="flex justify-center">
+                        <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-700">
+                          <img
+                            src={goalImageUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '';
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -310,6 +407,19 @@ export function SpendBucketScreen({ onBack }: SpendBucketScreenProps) {
                     className="mt-1.5 block w-full px-4 py-3 border border-slate-600 bg-slate-900 text-white rounded-xl focus:border-blue-400 focus:ring focus:ring-blue-500/20 transition-all"
                   />
                 </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-300">Product link (optional)</span>
+                  <input
+                    type="url"
+                    value={goalLink}
+                    onChange={(e) => setGoalLink(e.target.value)}
+                    placeholder="https://amazon.com/product..."
+                    className="mt-1.5 block w-full px-4 py-3 border border-slate-600 bg-slate-900 text-white rounded-xl focus:border-blue-400 focus:ring focus:ring-blue-500/20 transition-all text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Add a link to see what you're saving for</p>
+                </label>
+
                 <label className="block">
                   <span className="text-sm font-medium text-slate-300">Target amount</span>
                   <div className="relative mt-1.5">
