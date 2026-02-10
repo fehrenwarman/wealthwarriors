@@ -7,41 +7,48 @@ interface AllocationScreenProps {
   onComplete: () => void;
 }
 
-const QUICK_SPLITS = [
-  { name: '40-50-10', save: 40, spend: 50, share: 10 },
-  { name: '50-30-20', save: 50, spend: 30, share: 20 },
-  { name: 'Equal', save: 33.34, spend: 33.33, share: 33.33 },
-];
-
 export function AllocationScreen({ onComplete }: AllocationScreenProps) {
   const { getSelectedKid, allocateMoney } = useApp();
   const kid = getSelectedKid();
 
-  const [savePercent, setSavePercent] = useState(40);
-  const [spendPercent, setSpendPercent] = useState(50);
-  const [sharePercent, setSharePercent] = useState(10);
+  const amount = kid?.pendingAllocation || 0;
 
-  const totalPercent = savePercent + spendPercent + sharePercent;
-  const isValid = Math.abs(totalPercent - 100) < 0.01;
+  const [saveAmount, setSaveAmount] = useState(0);
+  const [spendAmount, setSpendAmount] = useState(0);
+  const [shareAmount, setShareAmount] = useState(0);
 
+  // Initialize with a default split when component mounts
   useEffect(() => {
-    // Auto-adjust share when save or spend changes
-    const remaining = 100 - savePercent - spendPercent;
-    if (remaining >= 0 && remaining <= 100) {
-      setSharePercent(remaining);
+    if (amount > 0) {
+      // Default 40-50-10 split
+      const save = Math.round(amount * 0.4 * 100) / 100;
+      const spend = Math.round(amount * 0.5 * 100) / 100;
+      const share = Math.round((amount - save - spend) * 100) / 100;
+      setSaveAmount(save);
+      setSpendAmount(spend);
+      setShareAmount(share);
     }
-  }, [savePercent, spendPercent]);
+  }, [amount]);
+
+  // Auto-adjust share when save or spend changes
+  useEffect(() => {
+    const remaining = Math.round((amount - saveAmount - spendAmount) * 100) / 100;
+    if (remaining >= 0) {
+      setShareAmount(remaining);
+    }
+  }, [saveAmount, spendAmount, amount]);
 
   if (!kid || !kid.pendingAllocation) {
     return null;
   }
 
-  const amount = kid.pendingAllocation;
-  const saveAmount = (amount * savePercent) / 100;
-  const spendAmount = (amount * spendPercent) / 100;
-  const shareAmount = (amount * sharePercent) / 100;
-  const allocatedAmount = saveAmount + spendAmount + shareAmount;
-  const remainingAmount = amount - allocatedAmount;
+  const totalAllocated = Math.round((saveAmount + spendAmount + shareAmount) * 100) / 100;
+  const isValid = Math.abs(totalAllocated - amount) < 0.01;
+
+  // Calculate percentages for display
+  const savePercent = amount > 0 ? Math.round((saveAmount / amount) * 100) : 0;
+  const spendPercent = amount > 0 ? Math.round((spendAmount / amount) * 100) : 0;
+  const sharePercent = amount > 0 ? Math.round((shareAmount / amount) * 100) : 0;
 
   // Calculate XP preview
   const xpPreview = XP_REWARDS.ALLOCATE_MONEY + Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR);
@@ -49,10 +56,28 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
   // Pet info
   const petEmoji = kid.currentPet ? getPetEmoji(kid.currentPet.type, kid.currentPet.level) : '🥚';
 
-  const handleQuickSplit = (split: typeof QUICK_SPLITS[0]) => {
-    setSavePercent(split.save);
-    setSpendPercent(split.spend);
-    setSharePercent(split.share);
+  const handleQuickSplit = (saveRatio: number, spendRatio: number) => {
+    const save = Math.round(amount * saveRatio * 100) / 100;
+    const spend = Math.round(amount * spendRatio * 100) / 100;
+    const share = Math.round((amount - save - spend) * 100) / 100;
+    setSaveAmount(save);
+    setSpendAmount(spend);
+    setShareAmount(share);
+  };
+
+  const handleSaveChange = (value: number) => {
+    const newSave = Math.min(value, amount);
+    setSaveAmount(newSave);
+    // Adjust spend if needed
+    if (newSave + spendAmount > amount) {
+      setSpendAmount(Math.max(0, amount - newSave));
+    }
+  };
+
+  const handleSpendChange = (value: number) => {
+    const maxSpend = amount - saveAmount;
+    const newSpend = Math.min(value, maxSpend);
+    setSpendAmount(newSpend);
   };
 
   const handleConfirm = () => {
@@ -60,6 +85,12 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
       allocateMoney(kid.id, saveAmount, spendAmount, shareAmount);
       onComplete();
     }
+  };
+
+  // For dollar input handling
+  const formatDollarInput = (value: string): number => {
+    const num = parseFloat(value) || 0;
+    return Math.round(Math.max(0, Math.min(num, amount)) * 100) / 100;
   };
 
   return (
@@ -103,24 +134,6 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
             <div className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-500 bg-clip-text text-transparent">
               ${amount.toFixed(2)}
             </div>
-            {remainingAmount > 0.01 && (
-              <motion.div
-                className="text-sm text-slate-400 mt-1"
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                ${remainingAmount.toFixed(2)} left to allocate
-              </motion.div>
-            )}
-            {remainingAmount <= 0.01 && isValid && (
-              <motion.div
-                className="text-sm text-emerald-400 font-medium mt-1"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                All allocated!
-              </motion.div>
-            )}
           </motion.div>
         </div>
 
@@ -151,23 +164,44 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
         </motion.div>
 
         {/* Quick Split Buttons */}
-        <div className="flex gap-2 mb-6 justify-center">
-          {QUICK_SPLITS.map((split) => (
-            <motion.button
-              key={split.name}
-              onClick={() => handleQuickSplit(split)}
-              className="px-3 py-1.5 bg-slate-700 text-slate-300 font-medium rounded-lg text-sm hover:bg-slate-600 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {split.name}
-            </motion.button>
-          ))}
+        <div className="flex gap-2 mb-6 justify-center flex-wrap">
+          <motion.button
+            onClick={() => handleQuickSplit(0.4, 0.5)}
+            className="px-3 py-1.5 bg-slate-700 text-slate-300 font-medium rounded-lg text-sm hover:bg-slate-600 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            40-50-10
+          </motion.button>
+          <motion.button
+            onClick={() => handleQuickSplit(0.5, 0.3)}
+            className="px-3 py-1.5 bg-slate-700 text-slate-300 font-medium rounded-lg text-sm hover:bg-slate-600 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            50-30-20
+          </motion.button>
+          <motion.button
+            onClick={() => handleQuickSplit(0.334, 0.333)}
+            className="px-3 py-1.5 bg-slate-700 text-slate-300 font-medium rounded-lg text-sm hover:bg-slate-600 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Equal
+          </motion.button>
+          <motion.button
+            onClick={() => handleQuickSplit(1, 0)}
+            className="px-3 py-1.5 bg-amber-500/20 text-amber-400 font-medium rounded-lg text-sm hover:bg-amber-500/30 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            All Save
+          </motion.button>
         </div>
 
-        {/* Allocation Sliders */}
-        <div className="space-y-5">
-          {/* Save Slider */}
+        {/* Allocation Inputs */}
+        <div className="space-y-4">
+          {/* Save */}
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -177,26 +211,36 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
                 <span className="font-semibold text-white">Save</span>
                 <span className="text-xs text-amber-400 ml-1">(+{Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR)} XP)</span>
               </div>
-              <div className="text-right">
-                <span className="text-xl font-bold text-amber-400">
-                  ${saveAmount.toFixed(2)}
-                </span>
-                <span className="text-sm text-slate-500 ml-1">
-                  ({savePercent}%)
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">$</span>
+                <input
+                  type="number"
+                  value={saveAmount || ''}
+                  onChange={(e) => handleSaveChange(formatDollarInput(e.target.value))}
+                  step="0.01"
+                  min="0"
+                  max={amount}
+                  className="w-20 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-right text-amber-400 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
             </div>
             <input
               type="range"
-              value={savePercent}
-              onChange={(e) => setSavePercent(parseInt(e.target.value))}
+              value={saveAmount}
+              onChange={(e) => handleSaveChange(parseFloat(e.target.value))}
               min={0}
-              max={100}
+              max={amount}
+              step={0.01}
               className="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer accent-amber-500"
             />
+            <div className="flex justify-between text-xs text-slate-500 mt-1">
+              <span>$0</span>
+              <span className="text-amber-400">{savePercent}%</span>
+              <span>${amount.toFixed(2)}</span>
+            </div>
           </div>
 
-          {/* Spend Slider */}
+          {/* Spend */}
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -205,51 +249,54 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
                 </div>
                 <span className="font-semibold text-white">Spend</span>
               </div>
-              <div className="text-right">
-                <span className="text-xl font-bold text-blue-400">
-                  ${spendAmount.toFixed(2)}
-                </span>
-                <span className="text-sm text-slate-500 ml-1">
-                  ({spendPercent}%)
-                </span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">$</span>
+                <input
+                  type="number"
+                  value={spendAmount || ''}
+                  onChange={(e) => handleSpendChange(formatDollarInput(e.target.value))}
+                  step="0.01"
+                  min="0"
+                  max={amount - saveAmount}
+                  className="w-20 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-right text-blue-400 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
             <input
               type="range"
-              value={spendPercent}
-              onChange={(e) => setSpendPercent(parseInt(e.target.value))}
+              value={spendAmount}
+              onChange={(e) => handleSpendChange(parseFloat(e.target.value))}
               min={0}
-              max={100}
+              max={Math.max(0, amount - saveAmount)}
+              step={0.01}
               className="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500"
             />
+            <div className="flex justify-between text-xs text-slate-500 mt-1">
+              <span>$0</span>
+              <span className="text-blue-400">{spendPercent}%</span>
+              <span>${Math.max(0, amount - saveAmount).toFixed(2)}</span>
+            </div>
           </div>
 
-          {/* Share Slider */}
+          {/* Share (auto-calculated remainder) */}
           <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-rose-500/20 rounded-lg flex items-center justify-center">
                   <span className="text-lg">❤️</span>
                 </div>
                 <span className="font-semibold text-white">Share</span>
+                <span className="text-xs text-slate-400 ml-1">(remainder)</span>
               </div>
               <div className="text-right">
                 <span className="text-xl font-bold text-rose-400">
                   ${shareAmount.toFixed(2)}
                 </span>
-                <span className="text-sm text-slate-500 ml-1">
+                <span className="text-sm text-slate-500 ml-2">
                   ({sharePercent}%)
                 </span>
               </div>
             </div>
-            <input
-              type="range"
-              value={sharePercent}
-              onChange={(e) => setSharePercent(parseInt(e.target.value))}
-              min={0}
-              max={100}
-              className="w-full h-2 bg-slate-700 rounded-full appearance-none cursor-pointer accent-rose-500"
-            />
           </div>
         </div>
 
@@ -262,10 +309,10 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Ready to deploy
+              Ready to deploy ${totalAllocated.toFixed(2)}
             </span>
           ) : (
-            <span>Total: {totalPercent.toFixed(0)}% (must equal 100%)</span>
+            <span>Total: ${totalAllocated.toFixed(2)} / ${amount.toFixed(2)}</span>
           )}
         </div>
 
