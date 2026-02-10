@@ -325,6 +325,15 @@ export const dataService = {
       .eq('id', kidId);
   },
 
+  async updateKid(kidId: string, updates: { name?: string; age?: number; avatar?: string }): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    await db()
+      .from('kids')
+      .update(updates)
+      .eq('id', kidId);
+  },
+
   async updatePendingAllocation(kidId: string, amount: number | null): Promise<void> {
     if (!isSupabaseConfigured) return;
 

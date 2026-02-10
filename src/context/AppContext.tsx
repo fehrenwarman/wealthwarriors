@@ -16,6 +16,7 @@ const STORAGE_KEY = 'wealth-warriors-data';
 type AppAction =
   | { type: 'SET_FAMILY'; payload: Family }
   | { type: 'ADD_KID'; payload: { name: string; age: number; avatar: string } }
+  | { type: 'UPDATE_KID'; payload: { kidId: string; name?: string; age?: number; avatar?: string } }
   | { type: 'GRANT_MONEY'; payload: { kidId: string; amount: number; description: string } }
   | { type: 'ALLOCATE_MONEY'; payload: { kidId: string; save: number; spend: number; share: number } }
   | { type: 'SET_INTEREST_RATE'; payload: { kidId: string; rate: number } }
@@ -121,6 +122,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
         family: {
           ...state.family,
           kids: [...state.family.kids, newKid],
+        },
+      };
+    }
+
+    case 'UPDATE_KID': {
+      if (!state.family) return state;
+      const { kidId, name, age, avatar } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+            return {
+              ...kid,
+              ...(name !== undefined && { name }),
+              ...(age !== undefined && { age }),
+              ...(avatar !== undefined && { avatar }),
+            };
+          }),
         },
       };
     }
@@ -637,6 +658,7 @@ interface AppContextValue {
   isSupabaseEnabled: boolean;
   createFamily: (name: string) => Promise<void>;
   addKid: (name: string, age: number, avatar: string) => Promise<void>;
+  updateKid: (kidId: string, updates: { name?: string; age?: number; avatar?: string }) => Promise<void>;
   grantMoney: (kidId: string, amount: number, description: string) => Promise<void>;
   allocateMoney: (kidId: string, save: number, spend: number, share: number) => Promise<void>;
   setInterestRate: (kidId: string, rate: number) => Promise<void>;
@@ -735,6 +757,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     dispatch({ type: 'ADD_KID', payload: { name, age, avatar } });
+  };
+
+  const updateKid = async (kidId: string, updates: { name?: string; age?: number; avatar?: string }) => {
+    dispatch({ type: 'UPDATE_KID', payload: { kidId, ...updates } });
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.updateKid(kidId, updates);
+      } catch (e) {
+        console.error('Failed to update kid in Supabase:', e);
+      }
+    }
   };
 
   const grantMoney = async (kidId: string, amount: number, description: string) => {
@@ -1001,6 +1034,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isSupabaseEnabled: isSupabaseConfigured,
         createFamily,
         addKid,
+        updateKid,
         grantMoney,
         allocateMoney,
         setInterestRate,

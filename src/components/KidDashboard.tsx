@@ -12,17 +12,21 @@ import {
   getCurrentRankMinXP,
   getPetEmoji,
   getPetLevelName,
-  PET_OPTIONS
+  PET_OPTIONS,
+  AVATAR_OPTIONS
 } from '../types';
 
 type Screen = 'dashboard' | 'allocation' | 'save' | 'spend' | 'share';
 
 export function KidDashboard() {
-  const { getSelectedKid, selectKid, switchMode, state } = useApp();
+  const { getSelectedKid, selectKid, switchMode, state, updateKid } = useApp();
   const kid = getSelectedKid();
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showPinLock, setShowPinLock] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
 
   if (!kid) {
     selectKid(null);
@@ -95,10 +99,22 @@ export function KidDashboard() {
             </svg>
             Back
           </motion.button>
-          <div className="flex items-center gap-3">
+          <motion.button
+            onClick={() => {
+              setEditName(kid.name);
+              setEditAvatar(kid.avatar);
+              setShowEditProfile(true);
+            }}
+            className="flex items-center gap-3 hover:bg-slate-700/50 px-3 py-1.5 rounded-lg transition-colors"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
             <span className="text-2xl">{kid.avatar}</span>
             <span className="font-semibold text-white">{kid.name}</span>
-          </div>
+            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </motion.button>
           <motion.button
             onClick={handleParentModeClick}
             className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1"
@@ -368,6 +384,88 @@ export function KidDashboard() {
             }}
             onCancel={() => setShowPinLock(false)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {showEditProfile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowEditProfile(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-bold text-white mb-6">Edit Profile</h2>
+
+              {/* Avatar Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-400 mb-3">Choose Avatar</label>
+                <div className="flex flex-wrap gap-2">
+                  {AVATAR_OPTIONS.map((avatar) => (
+                    <motion.button
+                      key={avatar}
+                      onClick={() => setEditAvatar(avatar)}
+                      className={`w-12 h-12 text-2xl rounded-xl flex items-center justify-center transition-all ${
+                        editAvatar === avatar
+                          ? 'bg-amber-500/30 border-2 border-amber-500 ring-2 ring-amber-500/50'
+                          : 'bg-slate-700 border border-slate-600 hover:border-slate-500'
+                      }`}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {avatar}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Name Input */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-400 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="Enter name"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <motion.button
+                  onClick={() => setShowEditProfile(false)}
+                  className="flex-1 px-4 py-3 bg-slate-700 text-slate-300 font-semibold rounded-xl hover:bg-slate-600 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  onClick={async () => {
+                    if (editName.trim() && kid) {
+                      await updateKid(kid.id, { name: editName.trim(), avatar: editAvatar });
+                      setShowEditProfile(false);
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-semibold rounded-xl"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Save
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
