@@ -18,8 +18,44 @@ export function SaveBucketScreen({ onBack }: SaveBucketScreenProps) {
   const { getSelectedKid, hatchNewPet } = useApp();
   const kid = getSelectedKid();
   const [showNewPetModal, setShowNewPetModal] = useState(false);
-  const [newPetType, setNewPetType] = useState<PetType>('dragon');
   const [newPetName, setNewPetName] = useState('');
+  const [revealedPetType, setRevealedPetType] = useState<PetType | null>(null);
+  const [isRevealing, setIsRevealing] = useState(false);
+
+  // Get a random pet type (excluding any the kid already has in stable)
+  const getRandomPetType = (): PetType => {
+    const stableTypes = kid?.petStable.map(p => p.type) || [];
+    const currentType = kid?.currentPet?.type;
+    const availableTypes = PET_OPTIONS
+      .map(p => p.type)
+      .filter(t => t !== currentType && !stableTypes.includes(t));
+
+    // If all types are taken, allow any type
+    const typesToChooseFrom = availableTypes.length > 0 ? availableTypes : PET_OPTIONS.map(p => p.type);
+    return typesToChooseFrom[Math.floor(Math.random() * typesToChooseFrom.length)];
+  };
+
+  const handleOpenNewPetModal = () => {
+    setRevealedPetType(null);
+    setIsRevealing(false);
+    setNewPetName('');
+    setShowNewPetModal(true);
+  };
+
+  const handleRevealPet = () => {
+    setIsRevealing(true);
+    // Animate through random pets before revealing final
+    let count = 0;
+    const interval = setInterval(() => {
+      setRevealedPetType(PET_OPTIONS[Math.floor(Math.random() * PET_OPTIONS.length)].type);
+      count++;
+      if (count >= 10) {
+        clearInterval(interval);
+        setRevealedPetType(getRandomPetType());
+        setIsRevealing(false);
+      }
+    }, 100);
+  };
 
   if (!kid) return null;
 
@@ -42,10 +78,11 @@ export function SaveBucketScreen({ onBack }: SaveBucketScreenProps) {
   const petLevelName = pet ? getPetLevelName(pet.level) : 'No Pet';
 
   const handleHatchNewPet = () => {
-    if (newPetName.trim() && kid) {
-      hatchNewPet(kid.id, newPetType, newPetName.trim());
+    if (newPetName.trim() && kid && revealedPetType) {
+      hatchNewPet(kid.id, revealedPetType, newPetName.trim());
       setShowNewPetModal(false);
       setNewPetName('');
+      setRevealedPetType(null);
     }
   };
 
@@ -153,12 +190,12 @@ export function SaveBucketScreen({ onBack }: SaveBucketScreenProps) {
                 {pet.name} will move to your Pet Stable and you can adopt a new companion!
               </p>
               <motion.button
-                onClick={() => setShowNewPetModal(true)}
+                onClick={handleOpenNewPetModal}
                 className="w-full mt-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-semibold rounded-xl"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Hatch New Companion
+                Hatch Surprise Egg!
               </motion.button>
             </motion.div>
           )}
@@ -311,7 +348,7 @@ export function SaveBucketScreen({ onBack }: SaveBucketScreenProps) {
         </motion.div>
       </main>
 
-      {/* New Pet Modal */}
+      {/* Surprise Egg Modal */}
       <AnimatePresence>
         {showNewPetModal && (
           <motion.div
@@ -319,74 +356,133 @@ export function SaveBucketScreen({ onBack }: SaveBucketScreenProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowNewPetModal(false)}
+            onClick={() => !isRevealing && setShowNewPetModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl"
+              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-2xl font-bold text-amber-400 text-center mb-2">Choose Your New Companion</h2>
-              <p className="text-slate-400 text-center mb-6">
-                {pet?.name} will be retired to your Pet Stable
-              </p>
-
-              {/* Pet Selection Grid */}
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {PET_OPTIONS.map((petOption) => (
-                  <motion.button
-                    key={petOption.type}
-                    onClick={() => setNewPetType(petOption.type)}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      newPetType === petOption.type
-                        ? 'bg-amber-500/20 border-amber-500'
-                        : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
-                    }`}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="text-3xl mb-2">{petOption.emoji}</div>
-                    <div className="font-semibold text-white text-sm">{petOption.name}</div>
-                    <div className="text-xs text-slate-400 mt-1">{petOption.description}</div>
-                  </motion.button>
-                ))}
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-amber-400 mb-2">Surprise Egg!</h2>
+                <p className="text-slate-400">
+                  {pet?.name} will join your Pet Stable as an Elder
+                </p>
               </div>
 
-              {/* Pet Name Input */}
-              <div className="mb-6">
-                <label className="block">
-                  <span className="text-slate-300 font-medium">Name Your Companion</span>
-                  <input
-                    type="text"
-                    value={newPetName}
-                    onChange={(e) => setNewPetName(e.target.value)}
-                    placeholder={`My ${PET_OPTIONS.find(p => p.type === newPetType)?.name}`}
-                    className="mt-2 block w-full px-4 py-3 border-2 border-slate-600 bg-slate-900 text-white rounded-xl focus:border-amber-500 focus:ring focus:ring-amber-500/20 transition-all"
-                  />
-                </label>
+              {/* Egg / Revealed Pet Display */}
+              <div className="flex justify-center mb-6">
+                <motion.div
+                  className="text-8xl"
+                  animate={isRevealing ? {
+                    scale: [1, 1.2, 1],
+                    rotate: [-10, 10, -10],
+                  } : revealedPetType ? {
+                    scale: [0.5, 1.2, 1],
+                  } : {
+                    scale: [1, 1.05, 1],
+                    y: [0, -5, 0],
+                  }}
+                  transition={isRevealing ? {
+                    duration: 0.2,
+                    repeat: Infinity,
+                  } : {
+                    duration: 0.5,
+                  }}
+                >
+                  {revealedPetType
+                    ? PET_OPTIONS.find(p => p.type === revealedPetType)?.emoji
+                    : '🥚'}
+                </motion.div>
               </div>
 
-              <div className="flex gap-3">
+              {/* Revealed Pet Info */}
+              {revealedPetType && !isRevealing && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center mb-6"
+                >
+                  <p className="text-xl font-bold text-white">
+                    It's a {PET_OPTIONS.find(p => p.type === revealedPetType)?.name}!
+                  </p>
+                  <p className="text-slate-400 text-sm mt-1">
+                    {PET_OPTIONS.find(p => p.type === revealedPetType)?.description}
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Actions based on state */}
+              {!revealedPetType && !isRevealing && (
                 <motion.button
-                  onClick={() => setShowNewPetModal(false)}
-                  className="flex-1 py-3 bg-slate-700 text-white font-semibold rounded-xl"
+                  onClick={handleRevealPet}
+                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-bold text-lg rounded-xl"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  Cancel
+                  🎉 Crack the Egg! 🎉
                 </motion.button>
+              )}
+
+              {isRevealing && (
+                <div className="text-center py-4">
+                  <p className="text-amber-400 font-medium animate-pulse">Hatching...</p>
+                </div>
+              )}
+
+              {revealedPetType && !isRevealing && (
+                <>
+                  {/* Pet Name Input */}
+                  <div className="mb-6">
+                    <label className="block">
+                      <span className="text-slate-300 font-medium">Name Your New Companion</span>
+                      <input
+                        type="text"
+                        value={newPetName}
+                        onChange={(e) => setNewPetName(e.target.value)}
+                        placeholder={`My ${PET_OPTIONS.find(p => p.type === revealedPetType)?.name}`}
+                        className="mt-2 block w-full px-4 py-3 border-2 border-slate-600 bg-slate-900 text-white rounded-xl focus:border-amber-500 focus:ring focus:ring-amber-500/20 transition-all"
+                        autoFocus
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <motion.button
+                      onClick={() => {
+                        setShowNewPetModal(false);
+                        setRevealedPetType(null);
+                      }}
+                      className="flex-1 py-3 bg-slate-700 text-white font-semibold rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Cancel
+                    </motion.button>
+                    <motion.button
+                      onClick={handleHatchNewPet}
+                      disabled={!newPetName.trim()}
+                      className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-semibold rounded-xl disabled:opacity-50"
+                      whileHover={{ scale: newPetName.trim() ? 1.02 : 1 }}
+                      whileTap={{ scale: newPetName.trim() ? 0.98 : 1 }}
+                    >
+                      Welcome Home!
+                    </motion.button>
+                  </div>
+                </>
+              )}
+
+              {!revealedPetType && !isRevealing && (
                 <motion.button
-                  onClick={handleHatchNewPet}
-                  disabled={!newPetName.trim()}
-                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-semibold rounded-xl disabled:opacity-50"
-                  whileHover={{ scale: newPetName.trim() ? 1.02 : 1 }}
-                  whileTap={{ scale: newPetName.trim() ? 0.98 : 1 }}
+                  onClick={() => setShowNewPetModal(false)}
+                  className="w-full mt-3 py-2 text-slate-400 font-medium hover:text-slate-300 transition-colors"
+                  whileTap={{ scale: 0.98 }}
                 >
-                  Adopt!
+                  Maybe later
                 </motion.button>
-              </div>
+              )}
             </motion.div>
           </motion.div>
         )}

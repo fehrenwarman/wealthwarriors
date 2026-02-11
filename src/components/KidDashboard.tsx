@@ -13,20 +13,24 @@ import {
   getPetEmoji,
   getPetLevelName,
   PET_OPTIONS,
-  AVATAR_OPTIONS
+  AVATAR_OPTIONS,
+  type PetType
 } from '../types';
 
 type Screen = 'dashboard' | 'allocation' | 'save' | 'spend' | 'share';
 
 export function KidDashboard() {
-  const { getSelectedKid, selectKid, switchMode, state, updateKid } = useApp();
+  const { getSelectedKid, selectKid, switchMode, state, updateKid, setPet } = useApp();
   const kid = getSelectedKid();
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showPinLock, setShowPinLock] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showFirstPetModal, setShowFirstPetModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [firstPetType, setFirstPetType] = useState<PetType>('dragon');
+  const [firstPetName, setFirstPetName] = useState('');
 
   if (!kid) {
     selectKid(null);
@@ -65,6 +69,17 @@ export function KidDashboard() {
       switchMode('parent');
     }
   };
+
+  const handleAdoptFirstPet = () => {
+    if (firstPetName.trim() && kid) {
+      setPet(kid.id, firstPetType, firstPetName.trim());
+      setShowFirstPetModal(false);
+      setFirstPetName('');
+    }
+  };
+
+  // Show first pet selection if kid has no pet
+  const needsFirstPet = kid && !kid.currentPet;
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -194,38 +209,67 @@ export function KidDashboard() {
           </motion.div>
 
           {/* Pet Companion Card */}
-          <motion.button
-            onClick={() => setCurrentScreen('save')}
-            className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-6 text-left hover:border-amber-500/50 transition-all group"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            whileHover={{ y: -2 }}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Companion</p>
-                {kid.currentPet ? (
-                  <>
-                    <p className="text-xl font-bold text-white">{kid.currentPet.name}</p>
-                    <p className="text-amber-400 text-sm">{petLevelName} {PET_OPTIONS.find(p => p.type === kid.currentPet?.type)?.name}</p>
-                  </>
-                ) : (
-                  <p className="text-xl font-bold text-slate-500">No pet yet</p>
-                )}
+          {needsFirstPet ? (
+            <motion.button
+              onClick={() => setShowFirstPetModal(true)}
+              className="bg-gradient-to-br from-amber-500/20 via-slate-800 to-amber-500/20 rounded-2xl shadow-lg border-2 border-amber-500/50 border-dashed p-6 text-left hover:border-amber-500 transition-all group"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              whileHover={{ y: -2, scale: 1.02 }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-amber-400 text-sm font-medium">No Companion Yet!</p>
+                  <p className="text-xl font-bold text-white">Adopt Your First Pet</p>
+                  <p className="text-slate-400 text-sm">Choose your savings companion</p>
+                </div>
+                <motion.div
+                  className="text-5xl"
+                  animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  🥚
+                </motion.div>
               </div>
-              <motion.div
-                className="text-5xl"
-                animate={{ y: [0, -5, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                {petEmoji}
-              </motion.div>
-            </div>
-            <p className="text-xs text-slate-500 mt-2 group-hover:text-amber-400 transition-colors">
-              Tap to view pet details →
-            </p>
-          </motion.button>
+              <p className="text-xs text-amber-400 mt-2 font-medium">
+                Tap to choose your companion →
+              </p>
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={() => setCurrentScreen('save')}
+              className="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 p-6 text-left hover:border-amber-500/50 transition-all group"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              whileHover={{ y: -2 }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm font-medium">Companion</p>
+                  {kid.currentPet ? (
+                    <>
+                      <p className="text-xl font-bold text-white">{kid.currentPet.name}</p>
+                      <p className="text-amber-400 text-sm">{petLevelName} {PET_OPTIONS.find(p => p.type === kid.currentPet?.type)?.name}</p>
+                    </>
+                  ) : (
+                    <p className="text-xl font-bold text-slate-500">No pet yet</p>
+                  )}
+                </div>
+                <motion.div
+                  className="text-5xl"
+                  animate={{ y: [0, -5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  {petEmoji}
+                </motion.div>
+              </div>
+              <p className="text-xs text-slate-500 mt-2 group-hover:text-amber-400 transition-colors">
+                Tap to view pet details →
+              </p>
+            </motion.button>
+          )}
         </div>
 
         {/* Bucket Cards - Modern Design */}
@@ -499,6 +543,96 @@ export function KidDashboard() {
               >
                 Victory!
               </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* First Pet Selection Modal */}
+      <AnimatePresence>
+        {showFirstPetModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowFirstPetModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <motion.div
+                  className="text-6xl mb-3"
+                  animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  🥚
+                </motion.div>
+                <h2 className="text-2xl font-bold text-amber-400">Choose Your Companion!</h2>
+                <p className="text-slate-400 mt-2">
+                  Your first pet is special - pick wisely!
+                </p>
+              </div>
+
+              {/* Pet Selection Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {PET_OPTIONS.map((petOption) => (
+                  <motion.button
+                    key={petOption.type}
+                    onClick={() => setFirstPetType(petOption.type)}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      firstPetType === petOption.type
+                        ? 'bg-amber-500/20 border-amber-500'
+                        : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="text-3xl mb-2">{petOption.emoji}</div>
+                    <div className="font-semibold text-white text-sm">{petOption.name}</div>
+                    <div className="text-xs text-slate-400 mt-1">{petOption.description}</div>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Pet Name Input */}
+              <div className="mb-6">
+                <label className="block">
+                  <span className="text-slate-300 font-medium">Name Your Companion</span>
+                  <input
+                    type="text"
+                    value={firstPetName}
+                    onChange={(e) => setFirstPetName(e.target.value)}
+                    placeholder={`My ${PET_OPTIONS.find(p => p.type === firstPetType)?.name}`}
+                    className="mt-2 block w-full px-4 py-3 border-2 border-slate-600 bg-slate-900 text-white rounded-xl focus:border-amber-500 focus:ring focus:ring-amber-500/20 transition-all"
+                  />
+                </label>
+              </div>
+
+              <div className="flex gap-3">
+                <motion.button
+                  onClick={() => setShowFirstPetModal(false)}
+                  className="flex-1 py-3 bg-slate-700 text-white font-semibold rounded-xl"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Later
+                </motion.button>
+                <motion.button
+                  onClick={handleAdoptFirstPet}
+                  disabled={!firstPetName.trim()}
+                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-semibold rounded-xl disabled:opacity-50"
+                  whileHover={{ scale: firstPetName.trim() ? 1.02 : 1 }}
+                  whileTap={{ scale: firstPetName.trim() ? 0.98 : 1 }}
+                >
+                  Adopt!
+                </motion.button>
+              </div>
             </motion.div>
           </motion.div>
         )}
