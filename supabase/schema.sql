@@ -34,6 +34,7 @@ CREATE TABLE buckets (
   kid_id UUID NOT NULL REFERENCES kids(id) ON DELETE CASCADE,
   save_balance DECIMAL(10,2) DEFAULT 0,
   save_interest_rate DECIMAL(5,2) DEFAULT 5,
+  save_baseline DECIMAL(10,2) DEFAULT 0,
   spend_balance DECIMAL(10,2) DEFAULT 0,
   share_balance DECIMAL(10,2) DEFAULT 0,
   share_total_given DECIMAL(10,2) DEFAULT 0,

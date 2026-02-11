@@ -20,6 +20,7 @@ type AppAction =
   | { type: 'GRANT_MONEY'; payload: { kidId: string; amount: number; description: string } }
   | { type: 'ALLOCATE_MONEY'; payload: { kidId: string; save: number; spend: number; share: number } }
   | { type: 'SET_INTEREST_RATE'; payload: { kidId: string; rate: number } }
+  | { type: 'SET_BASELINE'; payload: { kidId: string; baseline: number } }
   | { type: 'ADD_GOAL'; payload: { kidId: string; name: string; targetAmount: number; icon: string; imageUrl?: string; linkUrl?: string } }
   | { type: 'ADD_CUSTOM_CAUSE'; payload: { kidId: string; cause: Cause } }
   | { type: 'FUND_GOAL'; payload: { kidId: string; goalId: string; amount: number } }
@@ -64,7 +65,8 @@ function checkAndAwardBadges(kid: Kid): Badge[] {
 function updatePetLevel(kid: Kid): Kid {
   if (!kid.currentPet) return kid;
 
-  const newLevel = getPetLevel(kid.buckets.save.balance);
+  const baseline = kid.buckets.save.baseline || 0;
+  const newLevel = getPetLevel(kid.buckets.save.balance, baseline);
 
   // Check if pet reached Elder (level 5)
   if (newLevel === 5 && kid.currentPet.level < 5) {
@@ -109,7 +111,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         currentPet: null,
         petStable: [],
         buckets: {
-          save: { balance: 0, interestRate: 5 },
+          save: { balance: 0, interestRate: 5, baseline: 0 },
           spend: { balance: 0, goals: [] },
           share: { balance: 0, totalGiven: 0 },
         },
@@ -155,11 +157,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
           ...state.family,
           kids: state.family.kids.map(kid => {
             if (kid.id !== kidId) return kid;
+            const baseline = kid.buckets.save.baseline || 0;
             const newPet: Pet = {
               id: uuidv4(),
               type: petType,
               name: petName,
-              level: getPetLevel(kid.buckets.save.balance),
+              level: getPetLevel(kid.buckets.save.balance, baseline),
               createdAt: new Date().toISOString(),
             };
             return {
@@ -272,9 +275,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
             const timestamp = new Date().toISOString();
             const transactions: Transaction[] = [];
 
-            // Calculate XP
-            let xpEarned = XP_REWARDS.ALLOCATE_MONEY; // Base XP for allocating
-            xpEarned += Math.floor(save * XP_REWARDS.SAVE_PER_DOLLAR); // XP for saving
+            // Calculate XP (action-based: 1 XP per bucket allocated to)
+            let xpEarned = 0;
+            if (save > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+            if (spend > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+            if (share > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+
+            // Check for pet level up bonus
+            const baseline = kid.buckets.save.baseline || 0;
+            const newSaveBalance = kid.buckets.save.balance + save;
+            const oldPetLevel = kid.currentPet?.level || 0;
+            const newPetLevel = getPetLevel(newSaveBalance, baseline);
+            if (newPetLevel > oldPetLevel) {
+              xpEarned += XP_REWARDS.PET_LEVEL_UP;
+            }
 
             if (save > 0) {
               transactions.push({
@@ -283,7 +297,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 amount: save,
                 bucket: 'save',
                 description: `Allocated $${save.toFixed(2)} to Save`,
-                xpEarned: Math.floor(save * XP_REWARDS.SAVE_PER_DOLLAR),
+                xpEarned: XP_REWARDS.ALLOCATE_TO_BUCKET,
                 timestamp,
               });
             }
@@ -294,6 +308,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 amount: spend,
                 bucket: 'spend',
                 description: `Allocated $${spend.toFixed(2)} to Spend`,
+                xpEarned: XP_REWARDS.ALLOCATE_TO_BUCKET,
                 timestamp,
               });
             }
@@ -304,11 +319,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 amount: share,
                 bucket: 'share',
                 description: `Allocated $${share.toFixed(2)} to Share`,
+                xpEarned: XP_REWARDS.ALLOCATE_TO_BUCKET,
                 timestamp,
               });
             }
 
-            const newSaveBalance = kid.buckets.save.balance + save;
             const newTotalXP = kid.totalXP + xpEarned;
             const newRank = getWarriorRank(newTotalXP);
 
@@ -348,6 +363,30 @@ function appReducer(state: AppState, action: AppAction): AppState {
               buckets: {
                 ...kid.buckets,
                 save: { ...kid.buckets.save, interestRate: rate },
+              },
+            };
+          }),
+        },
+      };
+    }
+
+    case 'SET_BASELINE': {
+      if (!state.family) return state;
+      const { kidId, baseline } = action.payload;
+      return {
+        ...state,
+        family: {
+          ...state.family,
+          kids: state.family.kids.map(kid => {
+            if (kid.id !== kidId) return kid;
+            // Recalculate pet level with new baseline
+            const newPetLevel = getPetLevel(kid.buckets.save.balance, baseline);
+            return {
+              ...kid,
+              currentPet: kid.currentPet ? { ...kid.currentPet, level: newPetLevel } : null,
+              buckets: {
+                ...kid.buckets,
+                save: { ...kid.buckets.save, baseline },
               },
             };
           }),
@@ -512,8 +551,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
             if (kid.id !== kidId) return kid;
             if (kid.buckets.share.balance < amount) return kid;
 
-            // Award XP for donating
-            const xpEarned = Math.floor(amount * XP_REWARDS.DONATE_PER_DOLLAR);
+            // Award XP for completing donation (action-based)
+            const xpEarned = XP_REWARDS.COMPLETE_DONATION;
             const newTotalXP = kid.totalXP + xpEarned;
             const newRank = getWarriorRank(newTotalXP);
 
@@ -662,6 +701,7 @@ interface AppContextValue {
   grantMoney: (kidId: string, amount: number, description: string) => Promise<void>;
   allocateMoney: (kidId: string, save: number, spend: number, share: number) => Promise<void>;
   setInterestRate: (kidId: string, rate: number) => Promise<void>;
+  setBaseline: (kidId: string, baseline: number) => Promise<void>;
   addGoal: (kidId: string, name: string, targetAmount: number, icon: string, imageUrl?: string, linkUrl?: string) => Promise<void>;
   addCustomCause: (kidId: string, cause: Cause) => Promise<void>;
   fundGoal: (kidId: string, goalId: string, amount: number) => Promise<void>;
@@ -803,13 +843,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await dataService.updatePendingAllocation(kidId, null);
 
           // Update pet level
-          const newLevel = getPetLevel(newSave);
-          if (kid.currentPet && newLevel !== kid.currentPet.level) {
+          const baseline = kid.buckets.save.baseline || 0;
+          const oldLevel = kid.currentPet?.level || 0;
+          const newLevel = getPetLevel(newSave, baseline);
+          if (kid.currentPet && newLevel !== oldLevel) {
             await dataService.updatePetLevel(kidId, newLevel);
           }
 
-          // Update XP
-          const xpEarned = XP_REWARDS.ALLOCATE_MONEY + Math.floor(save * XP_REWARDS.SAVE_PER_DOLLAR);
+          // Update XP (action-based: 1 per bucket + 10 for pet level up)
+          let xpEarned = 0;
+          if (save > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+          if (spend > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+          if (share > 0) xpEarned += XP_REWARDS.ALLOCATE_TO_BUCKET;
+          if (newLevel > oldLevel) xpEarned += XP_REWARDS.PET_LEVEL_UP;
+
           const newTotalXP = kid.totalXP + xpEarned;
           await dataService.updateKidXP(kidId, newTotalXP);
         }
@@ -826,6 +873,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await dataService.setInterestRate(kidId, rate);
       } catch (e) {
         console.error('Failed to set interest rate in Supabase:', e);
+      }
+    }
+  };
+
+  const setBaseline = async (kidId: string, baseline: number) => {
+    dispatch({ type: 'SET_BASELINE', payload: { kidId, baseline } });
+    if (isSupabaseConfigured) {
+      try {
+        await dataService.setBaseline(kidId, baseline);
+      } catch (e) {
+        console.error('Failed to set baseline in Supabase:', e);
       }
     }
   };
@@ -922,8 +980,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             newTotalGiven
           );
 
-          // Update XP
-          const xpEarned = Math.floor(amount * XP_REWARDS.DONATE_PER_DOLLAR);
+          // Update XP (action-based)
+          const xpEarned = XP_REWARDS.COMPLETE_DONATION;
           const newTotalXP = kid.totalXP + xpEarned;
           await dataService.updateKidXP(kidId, newTotalXP);
 
@@ -964,7 +1022,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               kid.buckets.share.balance
             );
 
-            const newLevel = getPetLevel(newSave);
+            const baseline = kid.buckets.save.baseline || 0;
+            const newLevel = getPetLevel(newSave, baseline);
             if (kid.currentPet && newLevel !== kid.currentPet.level) {
               await dataService.updatePetLevel(kidId, newLevel);
             }
@@ -996,7 +1055,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isSupabaseConfigured) {
       try {
         const kid = state.family?.kids.find(k => k.id === kidId);
-        const level = kid ? getPetLevel(kid.buckets.save.balance) : 0;
+        const baseline = kid?.buckets.save.baseline || 0;
+        const level = kid ? getPetLevel(kid.buckets.save.balance, baseline) : 0;
         await dataService.setPet(kidId, petType, petName, level);
       } catch (e) {
         console.error('Failed to set pet in Supabase:', e);
@@ -1038,6 +1098,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         grantMoney,
         allocateMoney,
         setInterestRate,
+        setBaseline,
         addGoal,
         addCustomCause,
         fundGoal,

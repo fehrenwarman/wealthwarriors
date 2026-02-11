@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '../context/AppContext';
-import { XP_REWARDS, getPetEmoji } from '../types';
+import { XP_REWARDS, getPetEmoji, getPetLevel } from '../types';
 
 interface AllocationScreenProps {
   onComplete: () => void;
@@ -50,8 +50,20 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
   const spendPercent = amount > 0 ? Math.round((spendAmount / amount) * 100) : 0;
   const sharePercent = amount > 0 ? Math.round((shareAmount / amount) * 100) : 0;
 
-  // Calculate XP preview
-  const xpPreview = XP_REWARDS.ALLOCATE_MONEY + Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR);
+  // Calculate XP preview (action-based: 1 XP per bucket)
+  let xpPreview = 0;
+  if (saveAmount > 0) xpPreview += XP_REWARDS.ALLOCATE_TO_BUCKET;
+  if (spendAmount > 0) xpPreview += XP_REWARDS.ALLOCATE_TO_BUCKET;
+  if (shareAmount > 0) xpPreview += XP_REWARDS.ALLOCATE_TO_BUCKET;
+
+  // Check if pet will level up
+  const baseline = kid.buckets.save.baseline || 0;
+  const currentSaveBalance = kid.buckets.save.balance;
+  const newSaveBalance = currentSaveBalance + saveAmount;
+  const currentPetLevel = kid.currentPet?.level || 0;
+  const newPetLevel = getPetLevel(newSaveBalance, baseline);
+  const willLevelUp = newPetLevel > currentPetLevel;
+  if (willLevelUp) xpPreview += XP_REWARDS.PET_LEVEL_UP;
 
   // Pet info
   const petEmoji = kid.currentPet ? getPetEmoji(kid.currentPet.type, kid.currentPet.level) : '🥚';
@@ -159,7 +171,7 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
             </motion.span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            +{XP_REWARDS.ALLOCATE_MONEY} base + {Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR)} from saving
+            {saveAmount > 0 && '+1 Save'}{spendAmount > 0 && ' +1 Spend'}{shareAmount > 0 && ' +1 Share'}{willLevelUp && ' +10 Pet Level Up!'}
           </p>
         </motion.div>
 
@@ -209,7 +221,7 @@ export function AllocationScreen({ onComplete }: AllocationScreenProps) {
                   <span className="text-lg">💰</span>
                 </div>
                 <span className="font-semibold text-white">Save</span>
-                <span className="text-xs text-amber-400 ml-1">(+{Math.floor(saveAmount * XP_REWARDS.SAVE_PER_DOLLAR)} XP)</span>
+                {willLevelUp && <span className="text-xs text-amber-400 ml-1">🎉 Pet levels up!</span>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-slate-500">$</span>

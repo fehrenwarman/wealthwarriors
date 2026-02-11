@@ -28,19 +28,20 @@ export const PET_OPTIONS: { type: PetType; emoji: string; name: string; descript
 
 export const PET_LEVELS = [
   { level: 0, name: 'Egg', minBalance: 0, emoji: '🥚' },
-  { level: 1, name: 'Baby', minBalance: 10, emoji: '🐣' },
-  { level: 2, name: 'Young', minBalance: 25, emoji: '🐤' },
-  { level: 3, name: 'Teen', minBalance: 50, emoji: '🦅' },
-  { level: 4, name: 'Adult', minBalance: 100, emoji: '🦅' },
-  { level: 5, name: 'Elder', minBalance: 250, emoji: '👑' },
+  { level: 1, name: 'Baby', minBalance: 25, emoji: '🐣' },
+  { level: 2, name: 'Young', minBalance: 100, emoji: '🐤' },
+  { level: 3, name: 'Teen', minBalance: 250, emoji: '🦅' },
+  { level: 4, name: 'Adult', minBalance: 500, emoji: '🦅' },
+  { level: 5, name: 'Elder', minBalance: 1000, emoji: '👑' },
 ];
 
-export function getPetLevel(saveBalance: number): number {
-  if (saveBalance >= 250) return 5;
-  if (saveBalance >= 100) return 4;
-  if (saveBalance >= 50) return 3;
-  if (saveBalance >= 25) return 2;
-  if (saveBalance >= 10) return 1;
+export function getPetLevel(saveBalance: number, baseline: number = 0): number {
+  const effectiveBalance = Math.max(0, saveBalance - baseline);
+  if (effectiveBalance >= 1000) return 5;
+  if (effectiveBalance >= 500) return 4;
+  if (effectiveBalance >= 250) return 3;
+  if (effectiveBalance >= 100) return 2;
+  if (effectiveBalance >= 25) return 1;
   return 0;
 }
 
@@ -49,8 +50,8 @@ export function getPetLevelName(level: number): string {
 }
 
 export function getNextPetLevelThreshold(level: number): number {
-  if (level >= 5) return 250;
-  return PET_LEVELS[level + 1]?.minBalance || 250;
+  if (level >= 5) return 1000;
+  return PET_LEVELS[level + 1]?.minBalance || 1000;
 }
 
 export function getPetEmoji(type: PetType, level: number): string {
@@ -93,14 +94,13 @@ export function getCurrentRankMinXP(rank: number): number {
   return WARRIOR_RANKS.find(r => r.rank === rank)?.minXP || 0;
 }
 
-// XP Awards
+// XP Awards (action-based, not dollar-based)
 export const XP_REWARDS = {
-  ALLOCATE_MONEY: 10,
-  SAVE_PER_DOLLAR: 2,
-  COMPLETE_GOAL: 50,
-  DONATE_PER_DOLLAR: 3,
-  EARN_INTEREST: 10,
-  WEEKLY_STREAK: 50,
+  ALLOCATE_TO_BUCKET: 1,    // Per bucket allocated to (max 3 per allocation)
+  PET_LEVEL_UP: 10,         // When pet evolves to next level
+  COMPLETE_GOAL: 10,        // When purchasing a spend goal
+  COMPLETE_DONATION: 10,    // When completing a donation goal
+  EARN_INTEREST: 1,         // Monthly interest earned
 };
 
 // Spending Goals
@@ -168,6 +168,7 @@ export interface Transaction {
 export interface SaveBucket {
   balance: number;
   interestRate: number;
+  baseline: number; // Initial lump sum that doesn't count toward pet growth
 }
 
 export interface SpendBucket {

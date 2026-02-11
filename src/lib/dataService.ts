@@ -30,6 +30,7 @@ function dbKidToAppKid(
   buckets: {
     save_balance: number;
     save_interest_rate: number;
+    save_baseline: number;
     spend_balance: number;
     share_balance: number;
     share_total_given: number;
@@ -111,6 +112,7 @@ function dbKidToAppKid(
       save: {
         balance: Number(buckets?.save_balance || 0),
         interestRate: Number(buckets?.save_interest_rate || 5),
+        baseline: Number(buckets?.save_baseline || 0),
       },
       spend: {
         balance: Number(buckets?.spend_balance || 0),
@@ -290,6 +292,7 @@ export const dataService = {
       kid_id: kid.id,
       save_balance: 0,
       save_interest_rate: 5,
+      save_baseline: 0,
       spend_balance: 0,
       share_balance: 0,
       share_total_given: 0,
@@ -305,7 +308,7 @@ export const dataService = {
       currentPet: null,
       petStable: [],
       buckets: {
-        save: { balance: 0, interestRate: 5 },
+        save: { balance: 0, interestRate: 5, baseline: 0 },
         spend: { balance: 0, goals: [] },
         share: { balance: 0, totalGiven: 0 },
       },
@@ -377,6 +380,15 @@ export const dataService = {
     await db()
       .from('buckets')
       .update({ save_interest_rate: rate })
+      .eq('kid_id', kidId);
+  },
+
+  async setBaseline(kidId: string, baseline: number): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    await db()
+      .from('buckets')
+      .update({ save_baseline: baseline })
       .eq('kid_id', kidId);
   },
 

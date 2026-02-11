@@ -6,7 +6,7 @@ import type { Kid } from '../types';
 import { PinSetup } from './PinLock';
 
 export function ParentDashboard() {
-  const { state, switchMode, grantMoney, setInterestRate, addKid, applyInterest, setParentPin } = useApp();
+  const { state, switchMode, grantMoney, setInterestRate, setBaseline, addKid, applyInterest, setParentPin } = useApp();
   const [showGrantModal, setShowGrantModal] = useState<string | null>(null);
   const [showAddKidModal, setShowAddKidModal] = useState(false);
   const [showKidDetails, setShowKidDetails] = useState<string | null>(null);
@@ -396,6 +396,7 @@ export function ParentDashboard() {
             kidId={showKidDetails}
             onClose={() => setShowKidDetails(null)}
             onSetInterestRate={setInterestRate}
+            onSetBaseline={setBaseline}
             onApplyInterest={applyInterest}
           />
         )}
@@ -421,21 +422,28 @@ function KidDetailsModal({
   kidId,
   onClose,
   onSetInterestRate,
+  onSetBaseline,
   onApplyInterest,
 }: {
   kidId: string;
   onClose: () => void;
   onSetInterestRate: (kidId: string, rate: number) => void;
+  onSetBaseline: (kidId: string, baseline: number) => void;
   onApplyInterest: (kidId: string) => void;
 }) {
   const { state } = useApp();
   const kid = state.family?.kids.find((k) => k.id === kidId);
   const [interestRate, setInterestRate] = useState(kid?.buckets.save.interestRate || 5);
+  const [baseline, setBaseline] = useState(kid?.buckets.save.baseline || 0);
 
   if (!kid) return null;
 
   const handleSaveInterestRate = () => {
     onSetInterestRate(kidId, interestRate);
+  };
+
+  const handleSaveBaseline = () => {
+    onSetBaseline(kidId, baseline);
   };
 
   const monthlyInterest = (kid.buckets.save.balance * interestRate / 100 / 12);
@@ -525,6 +533,39 @@ function KidDetailsModal({
               whileTap={{ scale: 0.98 }}
             >
               Apply Interest Now
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Baseline Setting */}
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 mb-5">
+          <h4 className="font-semibold text-white mb-3">Pet Growth Baseline</h4>
+          <p className="text-sm text-slate-400 mb-3">
+            Initial lump sum that doesn't count toward pet evolution. Pet level is based on savings above this amount.
+            {baseline > 0 && (
+              <span className="block mt-1">
+                Current effective savings for pet: <span className="font-semibold text-blue-400">${Math.max(0, kid.buckets.save.balance - baseline).toFixed(2)}</span>
+              </span>
+            )}
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-500">$</span>
+            <input
+              type="number"
+              value={baseline || ''}
+              onChange={(e) => setBaseline(parseFloat(e.target.value) || 0)}
+              min={0}
+              step={1}
+              placeholder="0"
+              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <motion.button
+              onClick={handleSaveBaseline}
+              className="px-4 py-2.5 bg-blue-500 text-white font-semibold rounded-lg text-sm"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              Save Baseline
             </motion.button>
           </div>
         </div>
